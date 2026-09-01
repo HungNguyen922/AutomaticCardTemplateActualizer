@@ -1,0 +1,25 @@
+:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#15171b;color:#eee}
+header{padding:18px 22px;border-bottom:1px solid #30343b}
+header h1{margin:0;font-size:21px}header p{margin:5px 0 0;color:#9da4af}
+main{display:grid;grid-template-columns:390px 1fr;height:calc(100vh - 88px)}
+aside{border-right:1px solid #30343b;overflow:auto}.controls{padding:16px}
+label{display:block;color:#b8bec8;font-size:13px;margin-bottom:13px}
+input{display:block;width:100%;margin-top:6px}
+.buttons{display:flex;gap:8px;margin:16px 0}
+button{border:0;border-radius:6px;padding:9px 12px;background:#4f7cff;color:#fff;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+.status{border:1px solid #30343b;border-radius:6px;padding:10px;color:#b8bec8;font-size:13px;margin-bottom:10px}
+.ok{color:#79d99a}.warn{color:#ffcc66}.error{color:#ff7b7b}
+.progressWrap{height:7px;background:#2a2e35;border-radius:4px;margin-bottom:12px;overflow:hidden}
+.progressWrap.hidden{display:none}.progressWrap>div{height:100%;width:0;background:#4f7cff;transition:width .15s}
+.card{border:1px solid #30343b;border-radius:6px;padding:10px;margin-bottom:8px}
+.card.done{border-color:#4d8b62}.card.failed{border-color:#9a4d4d}
+.card strong{display:block}.card small{color:#9da4af}.card .cardStatus{margin-top:5px}
+.card .preview{margin-top:8px;border:1px solid #30343b;border-radius:5px;overflow:hidden;background:#0f1113}
+.card .preview img{display:block;width:100%;height:auto}
+.card .cardActions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.card .cardActions button{margin-top:0;font-size:12px;flex:1 1 auto;white-space:nowrap}
+.editor{min-width:0;display:flex;flex-direction:column}
+.editorHeader{padding:10px 14px;border-bottom:1px solid #30343b;display:flex;justify-content:space-between}
+.editorHeader span{color:#9da4af;font-size:13px}iframe{border:0;width:100%;height:100%}

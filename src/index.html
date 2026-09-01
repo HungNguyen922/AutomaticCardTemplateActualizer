@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReleaseTCG Card Generator</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header>
+  <h1>ReleaseTCG Card Generator</h1>
+  <p>CSV → Photopea → editable PSD + PNG</p>
+</header>
+
+<main>
+  <aside>
+    <section class="controls">
+      <label>Card data CSV
+        <input id="sheet" type="file" accept=".csv,text/csv">
+      </label>
+      <label>PSD template
+        <input id="template" type="file" accept=".psd">
+      </label>
+      <label>Card art folder
+        <input id="art" type="file" webkitdirectory directory multiple accept="image/*">
+      </label>
+
+      <div class="buttons">
+        <button id="load">Load cards</button>
+        <button id="generate" disabled>Generate all</button>
+        <button id="generatePngOnly">Generate All (PNG only)</button>
+        <button id="inspect" disabled>Inspect template</button>
+      </div>
+
+      <div id="status" class="status">Waiting for Photopea and your files…</div>
+      <div id="progressWrap" class="progressWrap hidden">
+        <div id="progressBar"></div>
+      </div>
+      <div id="cards"></div>
+    </section>
+  </aside>
+
+  <section class="editor">
+    <div class="editorHeader">
+      <strong>Photopea</strong>
+      <span id="ppstatus">Connecting…</span>
+    </div>
+    <iframe id="pp" src="https://www.photopea.com" title="Photopea"></iframe>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
