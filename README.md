@@ -1,23 +1,8 @@
 # ReleaseTCG Card Generator — Photopea Demo v2
 
-This version fixes the Photopea command/export flow and uses CSV only.
-
-## Why CSV?
-
-There is no special technical reason to use XLSX here. CSV is actually a better fit for this project because the generator only needs one flat table of card rows.
-
-The previous demo used SheetJS because it was convenient to support both CSV and XLSX. That added unnecessary workbook/sheet behavior for your workflow.
-
-This version uses Papa Parse for CSV and only accepts `.csv`.
-
 ## CSV columns
 
 Name, Power, Bulk, Color1, Color2, Color3, Color4, Trait, Effect1, Effect2, Clarify1, Clarify2, Clarify3, CardNumber, SetName, Artist, Art, Flavor, Inspiration
-
-Mapping:
-- Trait + Clarify1 -> effect block 1
-- Effect1 + Clarify2 -> effect block 2
-- Effect2 + Clarify3 -> effect block 3
 
 Flavor and Inspiration are currently read but not placed into the PSD because the current template does not have corresponding layers.
 
