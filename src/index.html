@@ -25,6 +25,14 @@
         <input id="art" type="file" webkitdirectory directory multiple accept="image/*">
       </label>
 
+      <label>Art Scaling:</label>
+        <select id="artScaleMode">
+          <option value="cover">Cover (default)</option>
+          <option value="contain">Contain</option>
+          <option value="stretch">Stretch</option>
+          <option value="none">No scaling</option>
+        </select>
+
       <div class="buttons">
         <button id="load">Load cards</button>
         <button id="generate" disabled>Generate all</button>
