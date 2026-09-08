@@ -100,8 +100,23 @@ function readCsv(file) {
 }
 
 function artFor(filename) {
-  const wanted = norm(filename).replace(/\\/g, "/").split("/").pop().toLowerCase();
-  return artFiles.get(wanted) || null;
+  if (!filename) return null;
+
+  // Normalize CSV value → strip path + extension
+  const wantedBase = norm(filename)
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    .replace(/\.[^.]+$/, "")        // remove extension
+    .toLowerCase();
+
+  // Search through uploaded art files
+  for (const [key, file] of artFiles.entries()) {
+    const fileBase = key.replace(/\.[^.]+$/, "").toLowerCase();
+    if (fileBase === wantedBase) return file;
+  }
+
+  return null;
 }
 
 function esc(s) {
