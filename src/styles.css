@@ -6,6 +6,7 @@ main{display:grid;grid-template-columns:390px 1fr;height:calc(100vh - 88px)}
 aside{border-right:1px solid #30343b;overflow:auto}.controls{padding:16px}
 label{display:block;color:#b8bec8;font-size:13px;margin-bottom:13px}
 input{display:block;width:100%;margin-top:6px}
+select{width: 100%;padding: 6px;margin-top: 6px;background: #2a2e35;color: #eee;border: 1px solid #30343b;border-radius: 6px;}
 .buttons{display:flex;gap:8px;margin:16px 0}
 button{border:0;border-radius:6px;padding:9px 12px;background:#4f7cff;color:#fff;cursor:pointer}
 button:disabled{opacity:.4;cursor:not-allowed}
