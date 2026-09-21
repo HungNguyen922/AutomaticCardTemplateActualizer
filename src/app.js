@@ -336,6 +336,7 @@ let binaryResolver = null;
 let binaryRejecter = null;
 let binaryTimer = null;
 let lastArtProbe = null;
+let lastPasteProbe = null;
 
 window.addEventListener("message", event => {
   if (event.source !== pp.contentWindow) return;
@@ -371,6 +372,15 @@ window.addEventListener("message", event => {
       lastArtProbe = JSON.parse(event.data.slice("ARTPROBE:".length));
     } catch {
       lastArtProbe = null;
+    }
+    return;
+  }
+
+  if (typeof event.data === "string" && event.data.startsWith("PASTEPROBE:")) {
+    try {
+      lastPasteProbe = JSON.parse(event.data.slice("PASTEPROBE:".length));
+    } catch {
+      lastPasteProbe = null;
     }
     return;
   }
@@ -532,7 +542,74 @@ async function waitForArtReady(maxAttempts = 15, delayMs = 200) {
   console.warn("waitForArtReady never stabilized after", maxAttempts, "attempts — proceeding anyway.");
 }
 
-function buildScript(card, scaleMode) {
+// Photopea's internal copy()/paste() can return control to the script before
+// the pasted layer's GPU texture/bounds have actually settled — locally this
+// is masked by near-zero network latency, but over a real connection (e.g.
+// GitHub Pages) the very next command can race Photopea's own rendering and
+// crash its engine. Poll the pasted layer the same way waitForArtReady polls
+// the source artwork, so we only proceed once its bounds are stable.
+async function waitForPastedArtReady(maxAttempts = 15, delayMs = 200) {
+  let lastKey = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    lastPasteProbe = null;
+    await sendScript(`
+      var t=null;
+      for(var i=0;i<app.documents.length;i++){
+        if(app.documents[i].source==="release-tcg-template"){t=app.documents[i];break;}
+      }
+      if(!t)throw Error("Template document not found while probing pasted art.");
+      app.activeDocument=t;
+      function find(root,name){
+        if(!root||!root.layers)return null;
+        for(var i=0;i<root.layers.length;i++){
+          var l=root.layers[i];
+          if(l.name===name)return l;
+          if(l.layers){var z=find(l,name);if(z)return z;}
+        }
+        return null;
+      }
+      function num(v){
+        if (v == null) return NaN;
+        if (typeof v === "number") return v;
+        try {
+          var p = JSON.parse(JSON.stringify(v));
+          if (p && typeof p.n === "number") return p.n;
+        } catch (e) {}
+        return Number(v);
+      }
+      var l=find(t,"Card Art Pending");
+      var b=l?l.bounds:null;
+      app.echoToOE("PASTEPROBE:"+JSON.stringify({
+        found: !!l,
+        kind: l?l.kind:null,
+        rawBounds: b,
+        boundsW: b?(num(b[2])-num(b[0])):0,
+        boundsH: b?(num(b[3])-num(b[1])):0
+      }));
+    `);
+
+    const info = lastPasteProbe;
+    console.log(`waitForPastedArtReady attempt ${attempt + 1}:`, info);
+
+    const ready = info && info.found && info.boundsW > 0 && info.boundsH > 0;
+    const key = ready ? `${info.boundsW}x${info.boundsH}` : null;
+
+    if (ready && key === lastKey) return;
+    lastKey = key;
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  console.warn("waitForPastedArtReady never stabilized after", maxAttempts, "attempts — proceeding anyway.");
+}
+
+// Sets every text/color/stat layer and performs the copy()/paste() of the
+// artwork, tagging the pasted layer "Card Art Pending". It deliberately does
+// NOT scale/position the art or touch ArtLayer — that happens in
+// buildPlaceScript, as its own round trip, once waitForPastedArtReady()
+// confirms the pasted layer's bounds have actually settled. Doing placement
+// math in the same script as the paste is what let Photopea's internal
+// clipboard/render pipeline race the script on real-world network latency
+// (fine on localhost, flaky on GitHub Pages).
+function buildPasteScript(card) {
   const colors = [card.Color1, card.Color2, card.Color3, card.Color4];
 
   return `(function(){
@@ -584,9 +661,6 @@ if(!artDoc)throw Error("Could not find the artwork document.");
 
 app.activeDocument=template;
 app.preferences.rulerUnits=Units.PIXELS;
-
-var artPlaceholder=find(template,"ArtLayer");
-if(!artPlaceholder)throw Error("ArtLayer placeholder not found.");
 
 var nameLayer=find(template,"CardName");
 if(!nameLayer)throw Error("Card-name text layer (\\"CardName\\") not found.");
@@ -707,7 +781,7 @@ for(var bi=0;bi<bulkGroup.layers.length;bi++){
     bulkGroup.layers[bi].visible=bulkGroup.layers[bi].name===${q(card.Bulk)};
 }
 
-// --- Artwork placement with scale modes: cover / contain / stretch / none ---
+// --- Copy/paste the artwork (placement happens in buildPlaceScript) ---
 
 app.activeDocument = artDoc;
 if (artDoc.layers.length > 1) artDoc.flatten();
@@ -718,20 +792,18 @@ if (Number(artDoc.resolution) !== Number(template.resolution)) {
   artDoc.resizeImage(undefined, undefined, template.resolution, ResampleMethod.NONE);
 }
 
-var cardW = Number(template.width);
-var cardH = Number(template.height);
-var artW0 = Number(artDoc.width);
-var artH0 = Number(artDoc.height);
-if (!(artW0 > 0 && artH0 > 0)) throw Error("Artwork document has invalid dimensions.");
+if (!(Number(artDoc.width) > 0 && Number(artDoc.height) > 0)) {
+  throw Error("Artwork document has invalid dimensions.");
+}
 
-app.activeDocument = artDoc;
 artSourceLayer.copy();
+artDoc.close(SaveOptions.DONOTSAVECHANGES);
 
 app.activeDocument = template;
 template.paste();
 var newArt = template.activeLayer;
 if (!newArt) throw Error("paste() did not produce a new layer.");
-newArt.name = "Card Art";
+newArt.name = "Card Art Pending";
 newArt.visible = true;
 
 var pasteBB = newArt.bounds;
@@ -739,6 +811,53 @@ app.echoToOE("ARTDEBUG3: post-paste kind=" + newArt.kind +
              " bounds=" + JSON.stringify(pasteBB) +
              " opacity=" + newArt.opacity +
              " isBackgroundLayer=" + newArt.isBackgroundLayer);
+})()`;
+}
+
+// Scales/positions the already-pasted "Card Art Pending" layer and drops it
+// into place. Sent as its own message, only after waitForPastedArtReady()
+// confirms the layer's bounds are non-zero and stable, so we never read
+// newArt.bounds before Photopea has actually finished realizing the paste.
+function buildPlaceScript(card, scaleMode) {
+  return `(function(){
+function find(root,name){
+  if(!root||!root.layers)return null;
+  for(var i=0;i<root.layers.length;i++){
+    var l=root.layers[i];
+    if(l.name===name)return l;
+    if(l.layers){var z=find(l,name);if(z)return z;}
+  }
+  return null;
+}
+function num(v){
+  if (v == null) return NaN;
+  if (typeof v === "number") return v;
+  try {
+    var p = JSON.parse(JSON.stringify(v));
+    if (p && typeof p.n === "number") return p.n;
+  } catch (e) {}
+  return Number(v);
+}
+function boundsPx(b){
+  return [num(b[0]),num(b[1]),num(b[2]),num(b[3])];
+}
+
+var template=null;
+for(var i=0;i<app.documents.length;i++){
+  if(app.documents[i].source==="release-tcg-template"){template=app.documents[i];break;}
+}
+if(!template)throw Error("Could not find the template document.");
+app.activeDocument=template;
+
+var artPlaceholder=find(template,"ArtLayer");
+if(!artPlaceholder)throw Error("ArtLayer placeholder not found.");
+
+var newArt=find(template,"Card Art Pending");
+if(!newArt)throw Error("Pasted art layer not found — the paste step may have failed.");
+
+var cardW = Number(template.width);
+var cardH = Number(template.height);
+var cardCenterX = cardW / 2;
 
 var bb = boundsPx(newArt.bounds);
 var w = bb[2] - bb[0];
@@ -779,13 +898,11 @@ app.echoToOE("ARTDEBUG2: placed art, mode=" + mode +
              " cardW=" + cardW + " cardH=" + cardH);
 
 newArt.move(artPlaceholder, ElementPlacement.PLACEBEFORE);
-artPlaceholder.visible = true;
+artPlaceholder.visible = false;
+newArt.name = "Card Art";
 newArt.grouped = true;
 
 template.name=${q(String(card.CardNumber).padStart(3,"0")+" - "+card.Name)};
-app.activeDocument=artDoc;
-artDoc.close(SaveOptions.DONOTSAVECHANGES);
-app.activeDocument=template;
 })()`;
 }
 
@@ -822,14 +939,34 @@ async function previewCard(index, { silent = false, scaleMode } = {}) {
 
   markCard(index, null, `Generating ${card.Name}…`);
 
+  if (!templateBuffer) throw new Error("No template PSD loaded.");
+
+  // Close any leftover template document from a previous preview before
+  // opening a fresh one — otherwise the script below can't find a document
+  // tagged "release-tcg-template" and every generation fails immediately.
+  await sendScript(`
+    for (var i = 0; i < app.documents.length; i++) {
+      if (app.documents[i].source === "release-tcg-template") {
+        app.activeDocument = app.documents[i];
+        app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);
+        break;
+      }
+    }
+  `);
+
+  await sendFile(templateBuffer);
+  await tagActiveDocument("release-tcg-template");
+
   const buffer = await artFile.arrayBuffer();
   await sendFile(buffer);
   await tagActiveDocument("release-tcg-art");
   await waitForArtReady();
 
+  await sendScript(buildPasteScript(card));
+  await waitForPastedArtReady();
+
   const mode = scaleMode || artScaleMode.value || "cover";
-  const script = buildScript(card, mode);
-  await sendScript(script);
+  await sendScript(buildPlaceScript(card, mode));
   await tagActiveDocument("release-tcg-template");
 
   const pngData = await exportCurrent("png");
@@ -877,4 +1014,3 @@ function editInPhotopea(index) {
   }
   setStatus("Card is already open in Photopea. Edit there, then Export when ready.", "ok");
 }
-
